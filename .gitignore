@@ -1,4 +1,6 @@
-/ANALYST/
-/DEV/
-
 .DS_Store
+
+/ANALYST
+/DEV
+
+test.py
