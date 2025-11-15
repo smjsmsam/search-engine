@@ -1,14 +1,18 @@
 import os
+import shutil
 import json
+import re
 from lxml import html, etree
 from nltk.stem import PorterStemmer
-import re
+from collections import defaultdict
 
 DEV = True
-PARTIAL_INDEX = {}
+PARTIAL_INDEX = []
 PARTIAL_LIST = []
 DOCID = 0
 PS = PorterStemmer()
+POSTING_COUNT = 0
+POSTING_THRESHOLD = 5000
 
 # inverted index: map(token, postings)
     # cannot hold all of index in memory
@@ -24,8 +28,6 @@ PS = PorterStemmer()
     # document name/id found in
     # tf-idf score (only term frequency for M1)
 
-
-
 # analytics:
     # number of indexed documents
     # number of unique tokens
@@ -40,25 +42,39 @@ PS = PorterStemmer()
     # add document frequency 
 
 def initialize_index(data_path):
-    global DOCID, PARTIAL_INDEX
-    # PARTIAL_INDEX = {"letter": [{docID}: [frequency], . . .]}
+    global DOCID, POSTING_COUNT, PARTIAL_INDEX
     for domain, dirnames, filenames in os.walk(data_path):
         for file in filenames:
+            file_info = {}
+            file_path = os.path.join(domain, file)
+            print("Indexing " + file_path)
+
+            with open(file_path, 'r') as f:
+                file_info = json.load(f)
+            raw_text = file_info["content"]
+            
+            # skip empty content
+            if not raw_text:
+                continue
+            
             DOCID += 1
             with open("docids.txt", 'a') as f:
-                f.write(DOCID + '\n' + file + '\n')
-            file_info = json.loads(os.path.join(domain, file))
-            raw_text = file_info["content"]
-            tokens = tokenize(raw_text)
-            terms = process_tokens(tokens)
-            postings = create_postings(terms)
-            update_index(postings)
-            # append/create term's index based on posting, with docid
-            
-                
-        # offload to partial index file every ___ documents(?)
+                f.write(str(DOCID) + '\n' + file_info["url"] + '\n')
 
-    # merge partial indexes (create separate files based on first letter of term?)
+            tokens = tokenize(raw_text)
+            # print("Tokens: " + str(tokens))
+            terms = process_tokens(tokens)
+            # print("Terms: " + str(terms))
+            postings = create_postings(terms)
+            # print("Postings: " + str(postings))
+            PARTIAL_INDEX.extend(postings.items())
+            POSTING_COUNT += len(postings)
+            # offload partial index (postings)
+            if POSTING_COUNT >= POSTING_THRESHOLD:
+                update_index()
+    if PARTIAL_INDEX:
+        update_index()
+    write_report()
 
 
 def tokenize(raw_text):
@@ -68,13 +84,16 @@ def tokenize(raw_text):
     returns {"important": []], "stuff": []}
     '''
     try:
-        tree = html.fromstring(raw_text)
+        tree = html.fromstring(raw_text.encode())
     except Exception as e:
         print(e)
-        return {}
+        return {"important": [], "stuff": []}
     
-    important_words = tree.xpath("//h1/text() | //h2/text() | //h3/text()"
+    important_words = []
+    important_text = tree.xpath("//h1/text() | //h2/text() | //h3/text()"
                                 " | //strong/text() | //title/text()")
+    for text in important_text:
+        important_words.extend(text.split())
     
     etree.strip_elements(tree, 'script', 'style', 'template', 'meta',
                         'svg', 'embed', 'object', 'iframe', 'canvas',
@@ -83,7 +102,6 @@ def tokenize(raw_text):
     text_content = tree.text_content()
     words = text_content.split()
     return {"important": important_words, "stuff": words}
-
 
 
 def process_tokens(tokens):
@@ -108,10 +126,11 @@ def normalize_and_stem(tokens):
     result = []
 
     for token in tokens:
-        norm = re.sub(r'[^a-zA-Z0-9]', '', token.lower())
-        if norm:
-            stemmed = PS.stem(norm)
-            result.append(stemmed)
+        if token != []:
+            norm = re.sub(r'[^a-zA-Z0-9]', '', token.lower())
+            if norm:
+                stemmed = PS.stem(norm)
+                result.append(stemmed)
     return result
 
 
@@ -119,8 +138,8 @@ def create_postings(terms):
     '''
     terms = tokens = {"important": [], "stuff": []}
 
-    returns {"[term]": {"document_id": [int],
-     "freq": {"important": [int], "stuff": [int]}}} 
+    returns [{"[term]": {"document_id": [int],
+     "freq": {"important": [int], "stuff": [int]}}}]
     '''
     global DOCID
     postings = {}
@@ -141,7 +160,7 @@ def create_postings(terms):
                               "freq": {"important": important_weights.get(term, 0),
                                        "stuff": 0}}
     # tf-idf score (only term frequency for M1) NGL IDK WHERE THiS GOES
-    return sorted(postings.items(), key=lambda x: x[0])
+    return postings
 
 
 def frequencies(items, weight=1):
@@ -157,58 +176,103 @@ def frequencies(items, weight=1):
     return result
 
 
-def update_index(postings):
-    # divide list into letters, already sorted by term name
+def update_index():
+    '''
+    PARTIAL_INDEX = [{"[term]": {"document_id": [int],
+     "freq": {"important": [int], "stuff": [int]}}}]
+    '''
+    global PARTIAL_INDEX
+    # divide list into letters, and sort terms alphabetically
+    # letters = {"a": {"apple": [posting1, posting2, ...]}}
+    sorted_postings = sorted(PARTIAL_INDEX, key=lambda x: x[0])
     letters = {}
-    for term, posting in postings.items():
-        letters[term[0]][term] = posting
-    i = 0
+    for term, posting in sorted_postings:
+        if term[0] not in letters:
+            letters[term[0]] = {}
+            letters[term[0]][term] = [posting]
+        else:
+            if term not in letters[term[0]]:
+                letters[term[0]][term] = [posting]
+            else:
+                letters[term[0]][term].extend(posting)
     
+    #make indexes folder if it doesn't exist
+    os.makedirs("indexes", exist_ok=True)
+
     # for each letter, add the new postings
-    for letter, term in letters.items():
+    for letter, terms_dict in letters.items():
+        terms = list(terms_dict.items())
+        i = 0
+        total_new = len(terms)
+
         index_path = "indexes/" + letter + ".txt"
         temp_path = index_path + ".tmp"
-        
+
+        # if file does not exist, make an empty file
         if not os.path.exists(index_path):
-            open(index_path, 'a').close()
-        
+            open(index_path, 'w').close()
+
+        # insert into temporary copy
         with open(index_path, 'r') as f, open(temp_path, 'w') as g:
+            # file format = term:{posting}, {posting}, ...
             for line in f:
-                current_term = line.split(':', 1)[0]
+                current_term, current_list = line.split(':', 1)
 
-                while i < len(postings):
-                    pass
+                # insert new term into alphabetically sorted spot
+                while i < total_new and terms[i][0] < current_term:
+                    term, posting = terms[i]
+                    g.write(term + ":" + json.dumps(posting) + "\n")
+                    i += 1
 
-
-def partial_offload():
-    # check if need partial
-    filepath = "partial" + str(len(PARTIAL_LIST)+1) + ".json"
-    with open (filepath, "w") as f:
-        # check json compatibility
-        json.dump(PARTIAL_INDEX, f)
-    PARTIAL_LIST.append(filepath)
-    PARTIAL_INDEX = {}
-
-
-def merge_partials():
-    # for each partial in PARTIAL_LIST, merge contents to its respective index file(?)
-    pass
-
+                # append to existing term
+                if i < total_new and terms[i][0] == current_term:
+                    term, posting = terms[i]
+                    try:
+                        current_postings = json.loads(current_list)
+                    except json.JSONDecodeError:
+                        current_postings = []
+                    # appended = line.rstrip('\n') + ", " + json.dumps(posting) + "\n"
+                    merged = current_postings + terms[i][1]
+                    g.write(term + ":" + json.dumps(merged) + "\n")
+                    i += 1
+                else:
+                    g.write(line)
+            
+            # insert remaining terms at the end
+            while i < total_new:
+                term, posting = terms[i]
+                g.write(term + ":" + json.dumps(posting) + "\n")
+                i += 1
+        
+        os.replace(temp_path, index_path)
+    PARTIAL_INDEX = []
+    
 
 def write_report():
     global DOCID
-    #TODO: index = length of index keys after combining
-    index = 0
-    size = os.path.getsize("index.json") / 1024
+    tokens = 0
+    size = 0
+    # for each index, add the size and count index
+    for index in "0123456789abcdefghijklmnopqrstuvwxyz":
+        path =  "indexes/" + index + ".txt"
+        try:
+            size += os.path.getsize(path)
+            tokens += sum(1 for _ in open(path, "rb"))
+        except (FileNotFoundError, OSError):
+            pass
+    size = size / 1024
 
     with open("report.txt", "w") as f:
-        f.write(f"Indexed documents: {DOCID}\n")  # do we every skip
-        f.write(f"Unique Tokens: {len(index)}\n")
+        f.write(f"Indexed documents: {DOCID}\n")
+        f.write(f"Unique Tokens: {tokens}\n")
         f.write(f"Total size: {size:.2f} KB\n")
 
 
-def main():
-    global DEV
-    data_path = "DEV" if DEV else "ANALYST"
-
+if __name__ == "__main__":
+    data_path = os.path.join(os.getcwd(), "DEV" if DEV else "ANALYST")
+    try:
+        os.remove("docids.txt")
+        shutil.rmtree("indexes")
+    except FileNotFoundError:
+        pass
     initialize_index(data_path)
