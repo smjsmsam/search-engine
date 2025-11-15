@@ -5,6 +5,7 @@ import re
 from lxml import html, etree
 from nltk.stem import PorterStemmer
 from collections import defaultdict
+import atexit
 
 DEV = True
 PARTIAL_INDEX = []
@@ -12,7 +13,7 @@ PARTIAL_LIST = []
 DOCID = 0
 PS = PorterStemmer()
 POSTING_COUNT = 0
-POSTING_THRESHOLD = 5000
+POSTING_THRESHOLD = 1000000
 
 # inverted index: map(token, postings)
     # cannot hold all of index in memory
@@ -43,6 +44,9 @@ POSTING_THRESHOLD = 5000
 
 def initialize_index(data_path):
     global DOCID, POSTING_COUNT, PARTIAL_INDEX
+
+    # create folder to hold partial indexes
+    os.makedirs("partials", exist_ok=True)
     for domain, dirnames, filenames in os.walk(data_path):
         for file in filenames:
             file_info = {}
@@ -71,10 +75,10 @@ def initialize_index(data_path):
             POSTING_COUNT += len(postings)
             # offload partial index (postings)
             if POSTING_COUNT >= POSTING_THRESHOLD:
-                update_index()
-    if PARTIAL_INDEX:
-        update_index()
-    write_report()
+                offload_partial()
+                POSTING_COUNT = 0
+    # merge_partial()
+    # write_report()
 
 
 def tokenize(raw_text):
@@ -176,17 +180,51 @@ def frequencies(items, weight=1):
     return result
 
 
-def update_index():
+def offload_partial():
+    '''
+    save PARTIAL_INDEX to json file
+    '''
+    global PARTIAL_INDEX
+    # dump to some file
+    filepath = "partials/" + str(len(PARTIAL_LIST)+1) + ".json"
+    with open (filepath, "w") as f:
+        # check json compatibility, convert to regular dict for JSON
+        json.dump(PARTIAL_INDEX, f)
+    PARTIAL_LIST.append(filepath)
+    PARTIAL_INDEX = []  # reset partial index
+    print(f"Offloaded partial index #{len(PARTIAL_LIST)-1} with {len(PARTIAL_INDEX)} terms")
+
+
+def merge_partial():
+    '''
+    sorts postings in each partial and updates index
+    '''
+    # create index files
+    os.makedirs("indexes", exist_ok=True)
+    for index in "0123456789abcdefghijklmnopqrstuvwxyz":
+        path =  "indexes/" + index + ".txt"
+        open(path, 'w').close()
+    # merge each partial file
+    for file in PARTIAL_LIST:
+        with open(file, "r") as f:
+            # sort
+            content = json.load(f)
+            sorted_postings = sorted(content, key=lambda x: x[0])
+            # insert into index
+            update_index(list(sorted_postings))
+        
+
+
+def update_index(postings):
     '''
     PARTIAL_INDEX = [{"[term]": {"document_id": [int],
      "freq": {"important": [int], "stuff": [int]}}}]
     '''
-    global PARTIAL_INDEX
-    # divide list into letters, and sort terms alphabetically
+    # divide list into letters, each term with a list of postings
     # letters = {"a": {"apple": [posting1, posting2, ...]}}
-    sorted_postings = sorted(PARTIAL_INDEX, key=lambda x: x[0])
+    # sorted_postings = postings
     letters = {}
-    for term, posting in sorted_postings:
+    for term, posting in postings:
         if term[0] not in letters:
             letters[term[0]] = {}
             letters[term[0]][term] = [posting]
@@ -195,9 +233,6 @@ def update_index():
                 letters[term[0]][term] = [posting]
             else:
                 letters[term[0]][term].extend(posting)
-    
-    #make indexes folder if it doesn't exist
-    os.makedirs("indexes", exist_ok=True)
 
     # for each letter, add the new postings
     for letter, terms_dict in letters.items():
@@ -209,8 +244,8 @@ def update_index():
         temp_path = index_path + ".tmp"
 
         # if file does not exist, make an empty file
-        if not os.path.exists(index_path):
-            open(index_path, 'w').close()
+        # if not os.path.exists(index_path):
+        #     open(index_path, 'w').close()
 
         # insert into temporary copy
         with open(index_path, 'r') as f, open(temp_path, 'w') as g:
@@ -245,7 +280,6 @@ def update_index():
                 i += 1
         
         os.replace(temp_path, index_path)
-    PARTIAL_INDEX = []
     
 
 def write_report():
@@ -268,11 +302,20 @@ def write_report():
         f.write(f"Total size: {size:.2f} KB\n")
 
 
+@atexit.register
+def last_report():
+    offload_partial()
+    print("Merging partials")
+    merge_partial()
+    write_report()
+
+
 if __name__ == "__main__":
     data_path = os.path.join(os.getcwd(), "DEV" if DEV else "ANALYST")
     try:
         os.remove("docids.txt")
         shutil.rmtree("indexes")
+        shutil.rmtree("partials")
     except FileNotFoundError:
         pass
     initialize_index(data_path)
