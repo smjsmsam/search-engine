@@ -4,8 +4,8 @@ import json
 import re
 from lxml import html, etree
 from nltk.stem import PorterStemmer
-from collections import defaultdict
 import atexit
+
 
 DEV = True
 PARTIAL_INDEX = []
@@ -15,35 +15,14 @@ PS = PorterStemmer()
 POSTING_COUNT = 0
 POSTING_THRESHOLD = 1000000
 
-# inverted index: map(token, postings)
-    # cannot hold all of index in memory
-    # must offload hash map from main memory to
-        # partial index on disk at least 3x during index construction,
-        # and merge all partial indexes at the end
-        # and optionally be split into seperate index files with term ranges
-
-# posting: represent token's occurence in a document
-    # must be variable-size
-        # disk: continuous run of postings
-        # memory: linked lists, variable-length arrays, associative arrays
-    # document name/id found in
-    # tf-idf score (only term frequency for M1)
-
-# analytics:
-    # number of indexed documents
-    # number of unique tokens
-    # total size (KB) of index on disk
-
-# tokenizer -> text processing -> indexer
-
-# indexer
-    # from slides: term, doc, freq (terms and counts) -> posting lists (docIDs)
-    # multiple term entries in single document are merged
-    # split into dictionary and postings
-    # add document frequency 
 
 def initialize_index(data_path):
-    global DOCID, POSTING_COUNT, PARTIAL_INDEX
+    '''
+    for each file in each domain, process the contents
+
+    creates new partial index after a certain amount of postings
+    '''
+    global DOCID, POSTING_COUNT, POSTING_THRESHOLD, PARTIAL_INDEX
 
     # create folder to hold partial indexes
     os.makedirs("partials", exist_ok=True)
@@ -77,8 +56,6 @@ def initialize_index(data_path):
             if POSTING_COUNT >= POSTING_THRESHOLD:
                 offload_partial()
                 POSTING_COUNT = 0
-    # merge_partial()
-    # write_report()
 
 
 def tokenize(raw_text):
@@ -184,7 +161,8 @@ def offload_partial():
     '''
     save PARTIAL_INDEX to json file
     '''
-    global PARTIAL_INDEX
+    global PARTIAL_INDEX, PARTIAL_LIST
+
     # dump to some file
     filepath = "partials/" + str(len(PARTIAL_LIST)+1) + ".json"
     with open (filepath, "w") as f:
@@ -212,7 +190,6 @@ def merge_partial():
             sorted_postings = sorted(content, key=lambda x: x[0])
             # insert into index
             update_index(list(sorted_postings))
-        
 
 
 def update_index(postings):
@@ -222,8 +199,8 @@ def update_index(postings):
     '''
     # divide list into letters, each term with a list of postings
     # letters = {"a": {"apple": [posting1, posting2, ...]}}
-    # sorted_postings = postings
     letters = {}
+
     for term, posting in postings:
         if term[0] not in letters:
             letters[term[0]] = {}
@@ -242,10 +219,6 @@ def update_index(postings):
 
         index_path = "indexes/" + letter + ".txt"
         temp_path = index_path + ".tmp"
-
-        # if file does not exist, make an empty file
-        # if not os.path.exists(index_path):
-        #     open(index_path, 'w').close()
 
         # insert into temporary copy
         with open(index_path, 'r') as f, open(temp_path, 'w') as g:
@@ -283,9 +256,13 @@ def update_index(postings):
     
 
 def write_report():
+    '''
+    save analytics to file
+    '''
     global DOCID
     tokens = 0
     size = 0
+
     # for each index, add the size and count index
     for index in "0123456789abcdefghijklmnopqrstuvwxyz":
         path =  "indexes/" + index + ".txt"
@@ -304,6 +281,9 @@ def write_report():
 
 @atexit.register
 def last_report():
+    '''
+    at the end of program, combine partials and create index files
+    '''
     offload_partial()
     print("Merging partials")
     merge_partial()
@@ -311,6 +291,9 @@ def last_report():
 
 
 if __name__ == "__main__":
+    '''
+    index /DEV or /ANALYST, clearing previous items before indexing
+    '''
     data_path = os.path.join(os.getcwd(), "DEV" if DEV else "ANALYST")
     try:
         os.remove("docids.txt")
