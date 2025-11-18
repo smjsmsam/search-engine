@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CS 121 Search Engine</title>
+</head>
+<body>
+    <form id="search-form">
+        <label for="search-input">Search Label</label>
+        <input type="search" id="search-input" name="query" placeholder="Search...">
+        <button type="submit">Search</button>
+    </form>
+    <div id="results"></div>
+</body>
+</html>
+
+<script>
+    document.getElementById("search-form").addEventListener("submit", function(e) {
+        e.preventDefault();
+
+        const query = document.getElementById("search-input").value;
+        document.getElementById("search-input").value = "";
+
+        fetch(`/api/search?query=${encodeURIComponent(query)}`)
+            .then(response => response.json())
+            .then(data => {
+                const div = document.getElementById("results");
+                div.innerHTML = "";
+                data.results.forEach(url => {
+                    // example
+                    // change to anchor tags later when real urls
+                    div.innerHTML += `<p>${url}</p>`;
+                });
+            });
+    });
+</script>
