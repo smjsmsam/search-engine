@@ -12,12 +12,13 @@ def search_query(query: str):
     parsed = parse_query(query)    
     postings = get_postings(parsed)
     rankedDocIDs = []
+    df = load_docids_csv()
     for posting in postings:
         # TODO: selecting and ranking postings
         # posting looks like this
         # {'word': [word], 'postings': [{'document_id': [int], 'freq': {'important': [int], 'stuff': [int]}}]}
-        pass
-    top_5_urls = [getUrl(docID) for docID in rankedDocIDs[:5]]
+        rankedDocIDs.append(posting['postings'][0]['document_id'])  # sample, comment out this line
+    top_5_urls = [getUrl(df, docID) for docID in rankedDocIDs[:5]]
     return top_5_urls
 
 
@@ -63,6 +64,7 @@ def get_postings(words: list[str]):
                 _postings = json.loads(posting.decode('utf-8'))
                 postings.append({"word": word.decode('utf-8'), "postings": _postings})
         i += 1
+    return postings
     
 
 def create_index_of_index():

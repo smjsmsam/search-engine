@@ -29,8 +29,6 @@
                 div.innerHTML = "";
                 let count = 1;
                 data.results.forEach(url => {
-                    // example
-                    // change to anchor tags later when real urls
                     div.innerHTML += `<p>${count}. <a href="${url}" target="_blank">${url}</a></p>`;
                     count++;
                 });
