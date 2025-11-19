@@ -12,7 +12,6 @@ def search():
 def api_search():
     query = request.args.get('query')
     results = search_query(query) if query else []
-    # sample result
     return {"results": results}
 
 

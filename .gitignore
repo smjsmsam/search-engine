@@ -6,9 +6,11 @@
 /ANALYST
 /DEV
 
+/index
 /indexes
 /partials
 
 docids.txt
 report.txt
 test.py
+docids.csv

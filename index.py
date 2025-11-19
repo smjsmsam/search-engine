@@ -2,6 +2,7 @@ import os
 import shutil
 import json
 import re
+import csv
 from lxml import html, etree
 from nltk.stem import PorterStemmer
 import atexit
@@ -10,10 +11,11 @@ import atexit
 DEV = True
 PARTIAL_INDEX = []
 PARTIAL_LIST = []
+CSVROWS = []
 DOCID = 0
 PS = PorterStemmer()
 POSTING_COUNT = 0
-POSTING_THRESHOLD = 1000000
+POSTING_THRESHOLD = 1_000_000
 
 
 def initialize_index(data_path):
@@ -41,8 +43,7 @@ def initialize_index(data_path):
                 continue
             
             DOCID += 1
-            with open("docids.txt", 'a') as f:
-                f.write(str(DOCID) + '\n' + file_info["url"] + '\n')
+            CSVROWS.append([DOCID, file_info["url"]])
 
             tokens = tokenize(raw_text)
             # print("Tokens: " + str(tokens))
@@ -255,6 +256,16 @@ def update_index(postings):
         os.replace(temp_path, index_path)
     
 
+def writecsv(filepath, rows):
+    '''
+    writes rows into filepath with the .csv file extension
+    '''
+    with open(filepath, 'w', newline='') as csvfile:
+        csvwriter = csv.writer(csvfile)
+        csvwriter.writerow(["DOCID", "URL"])  # write header
+        csvwriter.writerows(rows)
+
+
 def write_report():
     '''
     save analytics to file
@@ -282,8 +293,10 @@ def write_report():
 @atexit.register
 def last_report():
     '''
-    at the end of program, combine partials and create index files
+    at the end of program, create document url map, combine partials, and create index files
     '''
+    global CSVROWS
+    writecsv("docids.csv", CSVROWS)
     offload_partial()
     print("Merging partials")
     merge_partial()
