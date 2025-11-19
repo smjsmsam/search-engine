@@ -10,7 +10,6 @@
 /indexes
 /partials
 
-docids.txt
+docids.csv
 report.txt
 test.py
-docids.csv

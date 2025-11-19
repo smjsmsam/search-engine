@@ -46,13 +46,12 @@ def initialize_index(data_path):
             CSVROWS.append([DOCID, file_info["url"]])
 
             tokens = tokenize(raw_text)
-            # print("Tokens: " + str(tokens))
             terms = process_tokens(tokens)
-            # print("Terms: " + str(terms))
             postings = create_postings(terms)
-            # print("Postings: " + str(postings))
+
             PARTIAL_INDEX.extend(postings.items())
             POSTING_COUNT += len(postings)
+
             # offload partial index (postings)
             if POSTING_COUNT >= POSTING_THRESHOLD:
                 offload_partial()
@@ -126,7 +125,7 @@ def create_postings(terms):
     global DOCID
     postings = {}
 
-    important_weights = frequencies(terms["important"], 10)
+    important_weights = frequencies(terms["important"])
     stuff_weights = frequencies(terms["stuff"])
 
     for term in stuff_weights.keys():
@@ -141,7 +140,6 @@ def create_postings(terms):
             postings[term] = {"document_id": DOCID,
                               "freq": {"important": important_weights.get(term, 0),
                                        "stuff": 0}}
-    # tf-idf score (only term frequency for M1) NGL IDK WHERE THiS GOES
     return postings
 
 
@@ -198,10 +196,10 @@ def update_index(postings):
     PARTIAL_INDEX = [{"[term]": {"document_id": [int],
      "freq": {"important": [int], "stuff": [int]}}}]
     '''
-    # divide list into letters, each term with a list of postings
-    # letters = {"a": {"apple": [posting1, posting2, ...]}}
     letters = {}
 
+    # divide list into letters, each term with a list of postings
+    # letters = {"a": {"apple": [posting1, posting2, ...]}}
     for term, posting in postings:
         if term[0] not in letters:
             letters[term[0]] = {}
@@ -210,7 +208,7 @@ def update_index(postings):
             if term not in letters[term[0]]:
                 letters[term[0]][term] = [posting]
             else:
-                letters[term[0]][term].extend(posting)
+                letters[term[0]][term].append(posting)
 
     # for each letter, add the new postings
     for letter, terms_dict in letters.items():
@@ -223,7 +221,7 @@ def update_index(postings):
 
         # insert into temporary copy
         with open(index_path, 'r') as f, open(temp_path, 'w') as g:
-            # file format = term:{posting}, {posting}, ...
+            # file format is term:[{posting}, {posting}, ...]
             for line in f:
                 current_term, current_list = line.split(':', 1)
 
@@ -236,12 +234,8 @@ def update_index(postings):
                 # append to existing term
                 if i < total_new and terms[i][0] == current_term:
                     term, posting = terms[i]
-                    try:
-                        current_postings = json.loads(current_list)
-                    except json.JSONDecodeError:
-                        current_postings = []
-                    # appended = line.rstrip('\n') + ", " + json.dumps(posting) + "\n"
-                    merged = current_postings + terms[i][1]
+                    current_postings = json.loads(current_list)
+                    merged = current_postings + posting
                     g.write(term + ":" + json.dumps(merged) + "\n")
                     i += 1
                 else:
@@ -309,7 +303,7 @@ if __name__ == "__main__":
     '''
     data_path = os.path.join(os.getcwd(), "DEV" if DEV else "ANALYST")
     try:
-        os.remove("docids.txt")
+        os.remove("docids.csv")
         shutil.rmtree("indexes")
         shutil.rmtree("partials")
     except FileNotFoundError:
