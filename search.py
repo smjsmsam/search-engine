@@ -17,6 +17,7 @@ def search_query(query: str):
         # TODO: selecting and ranking postings
         # posting looks like this
         # {'word': [word], 'postings': [{'document_id': [int], 'freq': {'important': [int], 'stuff': [int]}}]}
+        # boolean AND operation or tf-idf scoring
         rankedDocIDs.append(posting['postings'][0]['document_id'])  # sample, comment out this line
     top_5_urls = [getUrl(df, docID) for docID in rankedDocIDs[:5]]
     return top_5_urls
@@ -66,33 +67,6 @@ def get_postings(words: list[str]):
         i += 1
     return postings
     
-
-def create_index_of_index():
-    '''
-    Creates an index for each index in indexes
-    '''
-    for index in "0123456789abcdefghijklmnopqrstuvwxyz":
-        words = []
-        offsets = []
-        csv_path = f"index/{index}_index.csv"
-        index_path = f"indexes/{index}.txt"
-        print(index)
-        with open(index_path, 'rb') as f:
-            offset = 0
-            line = f.readline()
-            while line:
-                word, _ = line.split(b':', 1)
-                words.append(word.decode('utf-8'))
-                offsets.append(offset)
-                offset = f.tell()
-                line = f.readline()
-        os.makedirs("index", exist_ok=True)
-        with open(csv_path, 'w', newline='') as f:
-            csvwriter = csv.writer(f)
-            csvwriter.writerow(["WORD", "OFFSET"])
-            for i in range(len(offsets)):
-                csvwriter.writerow([words[i], offsets[i]])
-
 
 def load_docids_csv():
     '''

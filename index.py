@@ -61,7 +61,8 @@ def initialize_index(data_path):
 def tokenize(raw_text):
     '''
     remove html tags
-    
+    #TODO: Keep track of word position
+
     returns {"important": []], "stuff": []}
     '''
     try:
@@ -284,6 +285,33 @@ def write_report():
         f.write(f"Total size: {size:.2f} KB\n")
 
 
+def create_index_of_index():
+    '''
+    Creates an index for each index in indexes
+    '''
+    for index in "0123456789abcdefghijklmnopqrstuvwxyz":
+        words = []
+        offsets = []
+        csv_path = f"index/{index}_index.csv"
+        index_path = f"indexes/{index}.txt"
+        print(index)
+        with open(index_path, 'rb') as f:
+            offset = 0
+            line = f.readline()
+            while line:
+                word, _ = line.split(b':', 1)
+                words.append(word.decode('utf-8'))
+                offsets.append(offset)
+                offset = f.tell()
+                line = f.readline()
+        os.makedirs("index", exist_ok=True)
+        with open(csv_path, 'w', newline='') as f:
+            csvwriter = csv.writer(f)
+            csvwriter.writerow(["WORD", "OFFSET"])
+            for i in range(len(offsets)):
+                csvwriter.writerow([words[i], offsets[i]])
+
+
 @atexit.register
 def last_report():
     '''
@@ -295,6 +323,7 @@ def last_report():
     print("Merging partials")
     merge_partial()
     write_report()
+    create_index_of_index()
 
 
 if __name__ == "__main__":
