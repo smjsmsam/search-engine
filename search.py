@@ -3,7 +3,10 @@ import csv
 import json
 import pandas as pd
 from nltk.stem import PorterStemmer
+import math
 
+WEIGHT_IMPORTANT = 5
+WEIGHT_STUFF = 1
 
 def search_query(query: str):
     '''
@@ -11,19 +14,58 @@ def search_query(query: str):
     '''
     parsed = parse_query(query)    
     postings = get_postings(parsed)
-    ranked_docids = []
     df = load_docids_csv()
-    for posting in postings:
-        # TODO: selecting and ranking postings
-        # posting looks like this
-        # {'token': [str], 'postings': [{'document_id': [int], 'freq': {'important': [int], 'stuff': [int]}}]}
-        # boolean AND operation (optional), tf-idf scoring
-        # *** we must use tf-idf
-        if posting["postings"] != "":
-            for p in posting["postings"]:
-                # something
-                ranked_docids.append(p['document_id'])
-    top_5_urls = [getUrl(df, docid) for docid in ranked_docids[:5]]
+
+    # Sort terms by document frequency (ascending)
+    postings.sort(key=lambda x: len(x['postings']))
+    # Start with the set of DodIDs from the first term
+    common_doc_ids = set(p['document_id'] for p in postings[0]['postings'])
+
+    # Interect with the rest
+    for posting in postings[1:]:
+        term_doc_ids = set(p['document_id'] for p in posting['postings'])
+        common_doc_ids.intersection_update(term_doc_ids)
+    
+    # Ranking (tf-idf)
+    # Only ranking the documents that survived the intersection
+    ranked_docids = []
+
+    for docID in common_doc_ids:
+        score = 0
+        for posting in postings:
+            # Find the specific posting for this docID
+            specific_posting = next((p for p in posting['postings'] if p['document_id'] == docID), None)
+
+            if specific_posting:
+                # Calculate tf
+                # Wtd = 1 + log10(tf)
+                freq_important = specific_posting['freq']['important']
+                freq_stuff = specific_posting['freq']['stuff']
+                raw_tf = (freq_important * WEIGHT_IMPORTANT) + (freq_stuff * WEIGHT_STUFF)
+                tf = 1 + math.log10(raw_tf) if raw_tf > 0 else 0
+
+                # Calculate idf
+                # idf = log10(N/df)
+                doc_freq = len(posting['postings'])
+                idf = math.log10(len(df) / doc_freq) if doc_freq > 0 else 0
+
+                # Add to total score
+                score += (tf * idf)
+        ranked_docids.append((docID, score))
+    
+    # Sort by score (descending)
+    ranked_docids.sort(key=lambda x: x[1], reverse=True)
+
+    # --- DEBUG START ---
+    print("\n--- DEBUG: Top 10 Scores ---")
+    for i in range(min(10, len(ranked_docids))):
+        doc_id, score = ranked_docids[i]
+        print(f"Rank {i+1}: DocID {doc_id} | Score: {score:.4f} | URL: {getUrl(df, doc_id)}")
+    print("----------------------------\n")
+    # --- DEBUG END ---
+
+    # Fetch URLs for Top 5
+    top_5_urls = [getUrl(df, docid) for docid, score in ranked_docids[:5]]
     return top_5_urls
 
 
