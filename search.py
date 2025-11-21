@@ -14,11 +14,16 @@ def search_query(query: str):
     rankedDocIDs = []
     df = load_docids_csv()
     for posting in postings:
+        print(posting)
         # TODO: selecting and ranking postings
         # posting looks like this
-        # {'word': [word], 'postings': [{'document_id': [int], 'freq': {'important': [int], 'stuff': [int]}}]}
-        # boolean AND operation or tf-idf scoring
-        rankedDocIDs.append(posting['postings'][0]['document_id'])  # sample, comment out this line
+        # {'word': [str], 'postings': [{'document_id': [int], 'freq': {'important': [int], 'stuff': [int]}}]}
+        # boolean AND operation (optional), tf-idf scoring
+        # *** we must use tf-idf
+        if posting["postings"] != "":
+            for p in posting["postings"]:
+                # something
+                rankedDocIDs.append(p['document_id'])
     top_5_urls = [getUrl(df, docID) for docID in rankedDocIDs[:5]]
     return top_5_urls
 
@@ -28,6 +33,7 @@ def parse_query(query: str, ps=PorterStemmer()):
     TODO: parse query words better -> importance, relevance, relative position, context, and stuff
     - Might need to change index.py for this
     - Currently stems, strips, and sorts the query words
+    *** whatever index does, it should be the same for parse_query()
     '''
     return sorted(ps.stem(q.strip()) for q in query.split())
 
@@ -37,7 +43,7 @@ def get_postings(words: list[str]):
     Assumes that words is sorted
 
     Returns postings
-    [{'word': [word], 'postings': [{'document_id': [int], 'freq': {'important': [int], 'stuff': [int]}}]}, ...]
+    [{'word': [str], 'postings': [{'document_id': [int], 'freq': {'important': [int], 'stuff': [int]}}]}, ...]
     '''
     postings = []
     

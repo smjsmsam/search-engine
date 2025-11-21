@@ -333,6 +333,7 @@ if __name__ == "__main__":
     data_path = os.path.join(os.getcwd(), "DEV" if DEV else "ANALYST")
     try:
         os.remove("docids.csv")
+        shutil.rmtree("index")
         shutil.rmtree("indexes")
         shutil.rmtree("partials")
     except FileNotFoundError:

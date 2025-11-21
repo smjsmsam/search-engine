@@ -12,5 +12,8 @@ if __name__ == "__main__":
     start = time.time()
     urls = search_query(query)
     end = time.time()
-    print(url for url in urls)
+    if urls:
+        print(*urls, sep="\n")
+    else:
+        print("No result found")
     print(f'{end-start} seconds')
