@@ -290,7 +290,7 @@ def create_index_of_index():
     Creates an index for each index in indexes
     '''
     for index in "0123456789abcdefghijklmnopqrstuvwxyz":
-        words = []
+        tokens = []
         offsets = []
         csv_path = f"index/{index}_index.csv"
         index_path = f"indexes/{index}.txt"
@@ -299,17 +299,17 @@ def create_index_of_index():
             offset = 0
             line = f.readline()
             while line:
-                word, _ = line.split(b':', 1)
-                words.append(word.decode('utf-8'))
+                token, _ = line.split(b':', 1)
+                tokens.append(token.decode('utf-8'))
                 offsets.append(offset)
                 offset = f.tell()
                 line = f.readline()
         os.makedirs("index", exist_ok=True)
         with open(csv_path, 'w', newline='') as f:
             csvwriter = csv.writer(f)
-            csvwriter.writerow(["WORD", "OFFSET"])
+            csvwriter.writerow(["TOKEN", "OFFSET"])
             for i in range(len(offsets)):
-                csvwriter.writerow([words[i], offsets[i]])
+                csvwriter.writerow([tokens[i], offsets[i]])
 
 
 @atexit.register
