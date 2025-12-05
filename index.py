@@ -61,9 +61,8 @@ def initialize_index(data_path):
 def tokenize(raw_text):
     '''
     remove html tags
-    #TODO: Keep track of word position
 
-    returns {"important": []], "stuff": []}
+    returns {"important": {word: {word: [positions]}, "stuff": {word: [positions]}}
     '''
     try:
         tree = html.fromstring(raw_text.encode())
@@ -71,24 +70,39 @@ def tokenize(raw_text):
         print(e)
         return {"important": [], "stuff": []}
     
-    important_words = []
     important_text = tree.xpath("//h1/text() | //h2/text() | //h3/text()"
                                 " | //strong/text() | //title/text()")
+    
+    pos_counter = 1
+    important_words = {}
+    
     for text in important_text:
-        important_words.extend(text.split())
+        words = text.split()
+        for word in words:
+            if word not in important_words:
+                important_words[word] = []
+            important_words[word].append(pos_counter)
+            pos_counter += 1
     
     etree.strip_elements(tree, 'script', 'style', 'template', 'meta',
                         'svg', 'embed', 'object', 'iframe', 'canvas',
                         'img', 'h1', 'h2', 'h3', 'strong', 'title')
     
     text_content = tree.text_content()
-    words = text_content.split()
+    words = {}
+
+    for word in text_content.split():
+        if word not in words:
+            words[word] = []
+        words[word].append(pos_counter)
+        pos_counter += 1
+
     return {"important": important_words, "stuff": words}
 
 
 def process_tokens(tokens):
     '''
-    tokens = {"important": [], "stuff": []}
+    tokens = {"important": {word: [positions]}, "stuff": {word: [positions]}}
     
     normalizes and stems tokens into terms
     '''
@@ -102,59 +116,59 @@ def normalize_and_stem(tokens):
 
     uses porter stemmer library to find stem word
     
-    returns list of transformed tokens
+    returns dict of transformed tokens
     '''
     global PS
-    result = []
+    result = {}
 
-    for token in tokens:
+    if not tokens:
+        return result
+
+    for token, positions in tokens.items():
         if token != []:
             norm = re.sub(r'[^a-zA-Z0-9]', '', token.lower())
             if norm:
                 stemmed = PS.stem(norm)
-                result.append(stemmed)
+                if stemmed not in result:
+                    result[stemmed] = []
+                result[stemmed].extend(positions)
+
+    for stemmed in result:
+        result[stemmed].sort()
+
     return result
 
 
 def create_postings(terms):
     '''
-    terms = tokens = {"important": [], "stuff": []}
+    terms = tokens = {"important": {word: [positions]}, "stuff": {word: [positions]}}
 
-    returns [{"[term]": {"document_id": [int],
-     "freq": {"important": [int], "stuff": [int]}}}]
+    returns {term: {"document_id": [int],
+                    "freq": {"important": [int], "stuff": [int]},
+                    "pos": [positions]}}
     '''
     global DOCID
     postings = {}
 
-    important_weights = frequencies(terms["important"])
-    stuff_weights = frequencies(terms["stuff"])
-
-    for term in stuff_weights.keys():
-        postings[term] = {"document_id": DOCID, 
+    for term, positions in terms["stuff"].items():
+        postings[term] = {"document_id": DOCID,
                           "freq": {"important": 0,
-                                   "stuff": stuff_weights.get(term, 0)}}
-        
-    for term in important_weights.keys():
-        if postings.get(term, None):
-            postings[term]["freq"]["important"] = important_weights.get(term, 0)
+                                   "stuff": len(positions)},
+                          "pos": positions}
+    
+    for term, positions in terms["important"].items():
+        if term in postings:
+            postings[term]["freq"]["important"] = len(positions)
+            merged_positions = postings[term]["pos"] + positions
+            merged_positions.sort() 
+            postings[term]["pos"] = merged_positions
         else:
             postings[term] = {"document_id": DOCID,
-                              "freq": {"important": important_weights.get(term, 0),
-                                       "stuff": 0}}
+                              "freq": {"important": len(positions),
+                                       "stuff": 0},
+                              "pos": positions}
+
     return postings
-
-
-def frequencies(items, weight=1):
-    '''
-    returns {"word": [weight]}
-    '''
-    result = {}
-
-    for item in items:
-        if item not in result:
-            result[item] = 0
-        result[item] += weight
-    return result
 
 
 def offload_partial():
@@ -194,8 +208,9 @@ def merge_partial():
 
 def update_index(postings):
     '''
-    PARTIAL_INDEX = [{"[term]": {"document_id": [int],
-     "freq": {"important": [int], "stuff": [int]}}}]
+    PARTIAL_INDEX = [{term: {"document_id": [int],
+                             "freq": {"important": [int], "stuff": [int]},
+                             "pos": [positions]}}]
     '''
     letters = {}
 
