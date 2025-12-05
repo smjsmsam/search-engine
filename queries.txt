@@ -1,0 +1,14 @@
+Come up with a set of at least 20 queries 
+that guide you in evaluating how well your search engine performs, 
+both in terms of ranking performance (effectiveness) and 
+in terms of runtime performance (efficiency). 
+At least half of those queries should be chosen because 
+they do poorly on one or both criteria; the other half should do well.
+
+ideas:
+one word
+many many words
+"to be or not to be"
+broad
+specific
+idk help
