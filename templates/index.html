@@ -28,10 +28,15 @@
                 const div = document.getElementById("results");
                 div.innerHTML = "";
                 let count = 1;
-                data.results.forEach(url => {
-                    div.innerHTML += `<p>${count}. <a href="${url}" target="_blank">${url}</a></p>`;
-                    count++;
-                });
+                if(data.results.length > 0) {
+                    data.results.forEach(url => {
+                        div.innerHTML += `<p>${count}. <a href="${url}" target="_blank">${url}</a></p>`;
+                        count++;
+                    });
+                }
+                else {
+                    div.innerHTML = "No result found";
+                }
             });
     });
 </script>
