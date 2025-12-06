@@ -1,22 +1,24 @@
-Come up with a set of at least 20 queries 
-that guide you in evaluating how well your search engine performs, 
-both in terms of ranking performance (effectiveness) and 
-in terms of runtime performance (efficiency). 
-At least half of those queries should be chosen because 
-they do poorly on one or both criteria; the other half should do well.
-
-ideas:
-one word
-many many words
-"to be or not to be"
-broad
-specific
-idk help
-christina lopes
-machine learning
 uci
 ics 31
 informatics
-information retrieval
 cats
-easiest computer science class
+*to be or not to be
+cristina lopes
+machine learning
+information retrieval
+*easiest computer science class
+*the quick brown fox jumped over the lazy dog
+operating systems
+feast or famine
+average gpa
+supervised learning
+data mining
+michael shindler
+formal languages and automata
+ics counsellors
+air pollution
+large language model
+compliers
+*graph algorithms
+*most interesting class at uci
+tallest professor

@@ -319,6 +319,7 @@ def create_index_of_index():
     '''
     Creates an index for each index in indexes
     '''
+    os.makedirs("index", exist_ok=True)
     for index in "0123456789abcdefghijklmnopqrstuvwxyz":
         tokens = []
         offsets = []
