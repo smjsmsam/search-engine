@@ -6,6 +6,7 @@ import csv
 from lxml import html, etree
 from nltk.stem import PorterStemmer
 import atexit
+import hashlib
 
 
 DEV = True
@@ -16,6 +17,7 @@ DOCID = 0
 PS = PorterStemmer()
 POSTING_COUNT = 0
 POSTING_THRESHOLD = 1_000_000
+SEEN_HASHES = set()
 
 
 def initialize_index(data_path):
@@ -42,6 +44,19 @@ def initialize_index(data_path):
             if not raw_text:
                 continue
             
+            # Skip duplicate content
+            # Create a unique hash of the raw text content
+            content_hash = hashlib.md5(raw_text.encode('utf-8')).hexdigest()
+            
+            if content_hash in SEEN_HASHES:
+                # If we have seen this exact content before, skip it
+                print(f"Skipping duplicate: {file_info['url']}")
+                continue
+
+            # Otherwise, mark it as seen
+            SEEN_HASHES.add(content_hash)
+
+
             DOCID += 1
             CSVROWS.append([DOCID, file_info["url"]])
 
