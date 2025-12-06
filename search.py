@@ -103,10 +103,12 @@ def rank_postings(postings, df):
                                'doc_freq': len(data), 
                                'idf': idf})
 
+    if not len(term_data_list):
+        return []
     # Sort terms by document frequency (ascending)
     term_data_list.sort(key=lambda x: x['doc_freq'])
 
-    # Boolean interection logic (using keys of the new maps)
+    # Boolean intersection logic (using keys of the new maps)
     common_doc_ids = set(term_data_list[0]['map'].keys())
     for term_data in term_data_list[1:]:
         common_doc_ids.intersection_update(term_data['map'].keys())
