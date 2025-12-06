@@ -1,19 +1,24 @@
 import sys
 import time
-from search import search_query
+import search
 
 
 if __name__ == "__main__":
-    # for terminal search
-    if len(sys.argv) != 2:
-        print("Invalid number of arguments! Example: python terminal.py 'cristina lopes'")
-        sys.exit(1)
-    query = sys.argv[1]
-    start = time.time()
-    urls = search_query(query)
-    end = time.time()
-    if urls:
-        print(*urls, sep="\n")
-    else:
-        print("No result found")
-    print(f'{end-start} seconds')
+    '''
+    python terminal.py
+    '''
+    print("Ready.")
+    print("Enter 'exit' to exit.")
+
+    while True:
+        response = input("Search: ")
+        if response.lower() == 'exit':
+            break
+        start = time.time()
+        urls = search.search_query(response)
+        end = time.time()
+        if urls:
+            print(*urls, sep="\n")
+        else:
+            print("No result found")
+        print(f'Took {end-start} seconds to gather {len(urls)} responses.')

@@ -8,13 +8,14 @@ import math
 WEIGHT_IMPORTANT = 5
 WEIGHT_STUFF = 1
 
+DOCID_DF = pd.read_csv("docids.csv", dtype={'DOCID': 'Int64', 'URL': 'str'}, index_col="DOCID")
+
 def search_query(query: str):
     '''
     Main function to be called to search
     '''
     parsed = parse_query(query)    
     postings = get_postings(parsed)
-    df = load_docids_csv()
 
     # Convert list-of-lists to list-of-dicts, for faster look up
     term_data_list = []
@@ -24,7 +25,7 @@ def search_query(query: str):
         doc_freq = len(posting_map)
         
         # Pre-calculate idf to improve speed
-        idf = math.log10(len(df) / doc_freq) if doc_freq > 0 else 0
+        idf = math.log10(len(DOCID_DF) / doc_freq) if doc_freq > 0 else 0
 
         term_data_list.append({'token': item['token'], 'map': posting_map, 'doc_freq': len(item['postings']), 'idf': idf})
 
@@ -75,7 +76,7 @@ def search_query(query: str):
     # # --- DEBUG END ---
 
     # Fetch URLs for Top 5
-    top_5_urls = [getUrl(df, docid) for docid, score in ranked_docids[:5]]
+    top_5_urls = [getUrl(DOCID_DF, docid) for docid, score in ranked_docids[:5]]
     return top_5_urls
 
 
@@ -123,16 +124,6 @@ def get_postings(tokens: list[str]):
                 postings.append({"token": token.decode('utf-8'), "postings": _postings})
         i += 1
     return postings
-    
-
-def load_docids_csv():
-    '''
-    Assumes that docids.csv is already sorted due to the nature of how it was
-    created in index.py
-
-    Returns a DataFrame for docids
-    '''
-    return pd.read_csv("docids.csv", dtype={'DOCID': 'Int64', 'URL': 'str'}, index_col="DOCID")
 
 
 def load_index_csv(filepath: str):
