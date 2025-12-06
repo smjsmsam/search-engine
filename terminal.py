@@ -1,6 +1,6 @@
 import sys
 import time
-import search
+from search import search_query
 
 
 if __name__ == "__main__":
@@ -15,7 +15,7 @@ if __name__ == "__main__":
         if response.lower() == 'exit':
             break
         start = time.time()
-        urls = search.search_query(response)
+        urls = search_query(response)
         end = time.time()
         if urls:
             print(*urls, sep="\n")
