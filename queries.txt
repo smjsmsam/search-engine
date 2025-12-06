@@ -22,3 +22,9 @@ compliers
 *graph algorithms
 *most interesting class at uci
 tallest professor
+
+The queries with the asterisk mark are queries that we struggled with.
+We have found that the likely reason is the sheer length of the query and usage of stop words,
+which held a significant amount of postings.
+To help with performance, we optimized our rank function to only score the proximity of the top 200 tf-idf documents,
+and noticed a significant decrease in time.

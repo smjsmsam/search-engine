@@ -6,6 +6,7 @@ from nltk.stem import PorterStemmer
 import math
 import atexit
 import time
+import bisect
 
 
 WEIGHT_IMPORTANT = 5
@@ -24,8 +25,7 @@ for letter in "0123456789abcdefghijklmnopqrstuvwxyz":
     fp = open(path, "rb")
     INDEX_FILE_POINTERS[letter] = fp
     df = pd.read_csv(csv_path, dtype={'TOKEN': 'str', 'OFFSET': 'Int64'}, index_col="TOKEN")
-    INDEX_INDEX_CSV_CACHE[letter] = df["OFFSET"].to_dict()
-    # INDEX_INDEX_CSV_CACHE[letter] = pd.read_csv(csv_path, dtype={'TOKEN': 'str', 'OFFSET': 'Int64'}, index_col="TOKEN")
+    INDEX_INDEX_CSV_CACHE[letter] = list(df["OFFSET"].items())
 
 
 DOCID_DF = pd.read_csv("docids.csv", dtype={'DOCID': 'Int64', 'URL': 'str'}, index_col="DOCID")
@@ -89,23 +89,18 @@ def get_postings(tokens: list[str]):
         # df = load_index_csv_cache(letter, csv_path)
         offsets = INDEX_INDEX_CSV_CACHE[letter]
         f = INDEX_FILE_POINTERS[letter]
-        start = time.time()
         for token in tokens:
-            start1 = time.time()
-            pos = offsets.get(token)
-            # pos = get_offset(df, token)
+            pos = find_offset(INDEX_INDEX_CSV_CACHE[letter], token)
             if pos == None:
                 continue
             f.seek(pos)
             line = f.readline()
             token, posting = line.split(b':', 1)
-            _postings = orjson.loads(posting.decode('utf-8'))
-            postings[token] = _postings
+            start1 = time.time()
+            _postings = orjson.loads(posting)
             end1 = time.time()
-            print(f"Getting offset for {token} took {end1-start1} seconds")
-
-        end = time.time()
-        print(f"Getting postings for {letter} took {end-start} seconds")
+            print(f"loading took {end1-start1} seconds")
+            postings[token] = _postings
     return postings
 
 
@@ -251,6 +246,13 @@ def minimum_distance(a, b):
     return min
 
 
+def find_offset(offset_list, token):
+    idx = bisect.bisect_left(offset_list, (token, -1))
+    if idx < len(offset_list) and offset_list[idx][0] == token:
+        return offset_list[idx][1]
+    return None
+
+
 def load_index_csv_cache(letter, path):
     if letter not in INDEX_INDEX_CSV_CACHE:
         INDEX_INDEX_CSV_CACHE[letter] = load_index_csv(path)
@@ -264,27 +266,6 @@ def load_index_csv(filepath: str):
     Returns a DataFrame for index offsets
     '''
     return pd.read_csv(filepath, dtype={'TOKEN': 'str', 'OFFSET': 'Int64'}, index_col="TOKEN")
-
-
-def get_offset(df: pd.DataFrame, token: str):
-    '''
-    Finds the offset of the token in the index
-    '''
-    if token in df.index:
-        return df.loc[token, 'OFFSET']
-    else:
-        print("not here")
-        return None
-
-
-def get_offsets_map(letter, df):
-    '''
-    
-    '''
-    if letter not in OFFSET_CACHE:
-        OFFSET_CACHE[letter] = df['OFFSET'].to_dict()
-    return OFFSET_CACHE[letter]
-
 
 
 def getUrl(df: pd.DataFrame, docid: int):
