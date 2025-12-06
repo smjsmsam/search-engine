@@ -16,15 +16,26 @@ def search_query(query: str):
     postings = get_postings(parsed)
     df = load_docids_csv()
 
-    # Sort terms by document frequency (ascending)
-    postings.sort(key=lambda x: len(x['postings']))
-    # Start with the set of DodIDs from the first term
-    common_doc_ids = set(p['document_id'] for p in postings[0]['postings'])
+    # Convert list-of-lists to list-of-dicts, for faster look up
+    term_data_list = []
+    for item in postings:
+        # Convert list to dict: {docID: {freq_data}}
+        posting_map = {p['document_id']: p['freq'] for p in item['postings']}
+        doc_freq = len(posting_map)
+        
+        # Pre-calculate idf to improve speed
+        idf = math.log10(len(df) / doc_freq) if doc_freq > 0 else 0
 
-    # Interect with the rest
-    for posting in postings[1:]:
-        term_doc_ids = set(p['document_id'] for p in posting['postings'])
-        common_doc_ids.intersection_update(term_doc_ids)
+        term_data_list.append({'token': item['token'], 'map': posting_map, 'doc_freq': len(item['postings']), 'idf': idf})
+
+    # Sort terms by document frequency (ascending)
+    term_data_list.sort(key=lambda x: x['doc_freq'])
+
+    # Boolean interection logic (using keys of the new maps)
+    common_doc_ids = set(term_data_list[0]['map'].keys())
+    for term_data in term_data_list[1:]:
+        common_doc_ids.intersection_update(term_data['map'].keys())
+        if not common_doc_ids: return []
     
     # Ranking (tf-idf)
     # Only ranking the documents that survived the intersection
@@ -32,37 +43,36 @@ def search_query(query: str):
 
     for docID in common_doc_ids:
         score = 0
-        for posting in postings:
+        for term_data in term_data_list:
             # Find the specific posting for this docID
-            specific_posting = next((p for p in posting['postings'] if p['document_id'] == docID), None)
+            freq_data = term_data['map'][docID]
 
-            if specific_posting:
-                # Calculate tf
-                # Wtd = 1 + log10(tf)
-                freq_important = specific_posting['freq']['important']
-                freq_stuff = specific_posting['freq']['stuff']
-                raw_tf = (freq_important * WEIGHT_IMPORTANT) + (freq_stuff * WEIGHT_STUFF)
-                tf = 1 + math.log10(raw_tf) if raw_tf > 0 else 0
+            # Calculate tf
+            # Wtd = 1 + log10(tf)
+            raw_tf = (freq_data['important'] * WEIGHT_IMPORTANT) + (freq_data['stuff'] * WEIGHT_STUFF)
+            tf = 1 + math.log10(raw_tf) if raw_tf > 0 else 0
 
-                # Calculate idf
-                # idf = log10(N/df)
-                doc_freq = len(posting['postings'])
-                idf = math.log10(len(df) / doc_freq) if doc_freq > 0 else 0
+            # Calculate idf
+            # idf = log10(N/df)
+            # doc_freq = term_data['doc_freq']
+            # idf = math.log10(len(df) / doc_freq) if doc_freq > 0 else 0
 
-                # Add to total score
-                score += (tf * idf)
+            # idf pre-calculated above
+
+            # Add to total score
+            score += (tf * term_data['idf'])
         ranked_docids.append((docID, score))
     
     # Sort by score (descending)
     ranked_docids.sort(key=lambda x: x[1], reverse=True)
 
-    # --- DEBUG START ---
-    print("\n--- DEBUG: Top 10 Scores ---")
-    for i in range(min(10, len(ranked_docids))):
-        doc_id, score = ranked_docids[i]
-        print(f"Rank {i+1}: DocID {doc_id} | Score: {score:.4f} | URL: {getUrl(df, doc_id)}")
-    print("----------------------------\n")
-    # --- DEBUG END ---
+    # # --- DEBUG START ---
+    # print("\n--- DEBUG: Top 10 Scores ---")
+    # for i in range(min(10, len(ranked_docids))):
+    #     doc_id, score = ranked_docids[i]
+    #     print(f"Rank {i+1}: DocID {doc_id} | Score: {score:.4f} | URL: {getUrl(df, doc_id)}")
+    # print("----------------------------\n")
+    # # --- DEBUG END ---
 
     # Fetch URLs for Top 5
     top_5_urls = [getUrl(df, docid) for docid, score in ranked_docids[:5]]
